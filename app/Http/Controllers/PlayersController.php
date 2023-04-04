@@ -31,7 +31,9 @@ class PlayersController extends Controller
      */
     public function show($id)
     {
-
+        return new Response(
+            Player::find($id)
+        );
     }
 
     /**
