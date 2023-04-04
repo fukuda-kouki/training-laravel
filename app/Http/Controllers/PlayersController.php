@@ -64,13 +64,13 @@ class PlayersController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //プレイヤーの情報をアップデート
-        Player::where('id', $id)->update([
-            'name' => $request->input('name'),
-            'hp' => $request->input('hp'),
-            'mp' => $request->input('mp'),
-            'money' => $request->input('money')
-        ]);
+        $player = Player::where('id',$id);
+
+        //リクエストに含まれているプレイヤーの情報をアップデート
+        if($request->has('name')) $player->update(['name' => $request->input('name')]);
+        if($request->has('hp')) $player->update(['hp' => $request->input('hp')]);
+        if($request->has('mp'))  $player->update(['mp' => $request->input('mp')]);
+        if($request->has('money')) $player->update(['money' => $request->input('money')]);
     }
 
     /**
