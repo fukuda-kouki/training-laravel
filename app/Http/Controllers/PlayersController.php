@@ -64,7 +64,13 @@ class PlayersController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        //プレイヤーの情報をアップデート
+        Player::where('id', $id)->update([
+            'name' => $request->input('name'),
+            'hp' => $request->input('hp'),
+            'mp' => $request->input('mp'),
+            'money' => $request->input('money')
+        ]);
     }
 
     /**
