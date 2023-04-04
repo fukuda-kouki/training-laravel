@@ -44,7 +44,15 @@ class PlayersController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        //プレイヤーを作成しidを返す
+        return new Response([
+            'id'=> Player::insertGetId([
+                'name' => $request->input('name'),
+                'hp' => $request->input('hp'),
+                'mp' => $request->input('mp'),
+                'money' => $request->input('money')
+            ])
+        ]);
     }
 
     /**
