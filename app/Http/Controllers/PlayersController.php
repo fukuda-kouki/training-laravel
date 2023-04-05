@@ -64,13 +64,15 @@ class PlayersController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $player = Player::where('id',$id);
-
-        //リクエストに含まれているプレイヤーの情報をアップデート
-        if($request->has('name')) $player->update(['name' => $request->input('name')]);
-        if($request->has('hp')) $player->update(['hp' => $request->input('hp')]);
-        if($request->has('mp'))  $player->update(['mp' => $request->input('mp')]);
-        if($request->has('money')) $player->update(['money' => $request->input('money')]);
+        //リクエストに含まれているキーの取得
+        $keyArray = []; 
+        if($request->has('name'))  $keyArray['name']  = $request->input('name');
+        if($request->has('hp')) $keyArray['hp'] = $request->input('hp');
+        if($request->has('mp')) $keyArray['mp'] = $request->input('mp');
+        if($request->has('money')) $keyArray['money'] = $request->input('money');
+ 
+        //取得したキーのみを一度の処理で更新
+        Player::where('id',$id)->update($keyArray);
     }
 
     /**
