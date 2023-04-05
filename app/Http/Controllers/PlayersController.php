@@ -83,7 +83,8 @@ class PlayersController extends Controller
      */
     public function destroy($id)
     {
-        //
+        //指定されたIDのプレイヤー情報を削除
+        Player::where('id',$id)->delete();
     }
 
     /**
