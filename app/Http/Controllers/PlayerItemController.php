@@ -31,9 +31,14 @@ class PlayerItemController extends Controller
             where([['player_id', $id],['item_id', $request->input('itemId')]])->
             increment('count', $request->input('count'));
         }
-            
-        return new Response(PlayerItem::query()->
-        where([['player_id', $id],['item_id', $request->input('itemId')]])->
-        select('item_id','count')->get());
+
+        $playerItemData = PlayerItem::query()->
+        select('item_id','count')->
+        where([['player_id', $id],['item_id', $request->input('itemId')]]);
+
+        return new Response([
+            'itemId'=> $playerItemData->value('item_id'),
+            'count' => $playerItemData->value('count')
+        ]);
     }
 }
