@@ -8,5 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 class playerItem extends Model
 {
     public $timestamps = false;
+    public $incrementing = false;
     use HasFactory;
 }
