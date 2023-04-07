@@ -54,6 +54,7 @@ class PlayerItemController extends Controller
         $data = PlayerItem::query()->
         where([['player_id', $id],['item_id', $request->input('itemId')]]);
 
+        $count = 0;
         if($request->has('count'))
         {
             $count = $request->input('count');
@@ -74,7 +75,7 @@ class PlayerItemController extends Controller
         $dataArr =['hp', 'mp'];
 
         //ステータスが上限に達するまでに使用できるアイテムの個数を数える
-        $tempValue = $playerData->value($dataArr[$data->value('item_id') + 1]);
+        $tempValue = $playerData->value($dataArr[$data->value('item_id') - 1]);
         $effectValue = Item::where('id', $request->input('itemId'))->value('value');
         while($tempValue < PlayerItemController::MAX_STATUS)
         {
@@ -89,8 +90,8 @@ class PlayerItemController extends Controller
             $useCount = min($count,$useablecount);
 
             //アイテムを使用する
-            $value = $playerData->value($dataArr[$request->input('itemId') + 1]) + $effectValue * $useCount;
-            $playerData->update([$dataArr[$request->input('itemId') + 1] => min($value, PlayerItemController::MAX_STATUS)]);
+            $value = $playerData->value($dataArr[$request->input('itemId') - 1]) + $effectValue * $useCount;
+            $playerData->update([$dataArr[$request->input('itemId') - 1] => min($value, PlayerItemController::MAX_STATUS)]);
             $data->decrement('count', $useCount);
         }
 
