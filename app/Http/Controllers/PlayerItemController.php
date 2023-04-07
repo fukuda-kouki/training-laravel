@@ -56,24 +56,44 @@ class PlayerItemController extends Controller
 
         if($request->has('count'))
         {
-            $useCount = $request->input('count');
+            $count = $request->input('count');
         }
         else //リクエストに'count'が含まれていなければ使用数を1にする
         {
-            $useCount = 1;
+            $count = 1;
         }
         
         //所持数が使用数以下もしくはゼロ（該当するレコードがない）の場合エラー
-        if($data->get()->isEmpty() || $data->value('count') < $useCount)
+        if($data->get()->isEmpty() || $data->value('count') < $count)
         {
-            return new Response("アイテムを{$useCount}個所持していません。",Response::HTTP_BAD_REQUEST);
+            return new Response("アイテムを{$count}個所持していません。",Response::HTTP_BAD_REQUEST);
         }
 
         $playerData = Player::where('id',$id);
+        $useablecount = 0;
 
-        //該当するステータスがすでに上限の場合
-        if($playerData->value('hp') >= PlayerItemController::MAX_STATUS && $data->value('item_id') == 1 ||
-           $playerData->value('mp') >= PlayerItemController::MAX_STATUS && $data->value('item_id') == 2 )
+        //ステータスが上限に達するまでに使用できるアイテムの個数を数える
+        if($data->value('item_id') == 1)
+        {
+            $tempValue = $playerData->value('hp');
+            while($tempValue < PlayerItemController::MAX_STATUS)
+            {
+                $tempValue += Item::where('id', $request->input('itemId'))->value('value');
+                $useablecount++;
+            }
+        }
+        else if ($data->value('item_id') == 2)
+        {
+            $tempValue = $playerData->value('mp');
+            while($tempValue < PlayerItemController::MAX_STATUS)
+            {
+                $tempValue += Item::where('id', $request->input('itemId'))->value('value');
+                $useablecount++;
+            }
+        }
+
+        //使用可能個数がゼロ(該当するステータスがすでに上限)の場合
+        if($useablecount == 0)
         {
             return new Response([
                 'itemId' => $request->input('itemId'),
@@ -86,6 +106,9 @@ class PlayerItemController extends Controller
             ]);
         }
 
+        //実際に使用する個数の決定
+        $useCount = min($count,$useablecount);
+
         //アイテムを使用する
         if($request->input('itemId') == 1)
         {
@@ -93,7 +116,7 @@ class PlayerItemController extends Controller
         }
         else if($request->input('itemId') == 2)
         {
-            $playerData->update(['mp' => min($playerData->value('mp') + Item::where('id', $request->input('itemId'))->value('value')* $useCount , PlayerItemController::MAX_STATUS)]);
+            $playerData->update(['mp' => min($playerData->value('mp') + Item::where('id', $request->input('itemId'))->value('value') * $useCount , PlayerItemController::MAX_STATUS)]);
         }
         $data->decrement('count', $useCount);
 
