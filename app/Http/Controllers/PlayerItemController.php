@@ -76,18 +76,20 @@ class PlayerItemController extends Controller
         if($data->value('item_id') == 1)
         {
             $tempValue = $playerData->value('hp');
+            $effectValue = Item::where('id', $request->input('itemId'))->value('value');
             while($tempValue < PlayerItemController::MAX_STATUS)
             {
-                $tempValue += Item::where('id', $request->input('itemId'))->value('value');
+                $tempValue += $effectValue;
                 $useablecount++;
             }
         }
         else if ($data->value('item_id') == 2)
         {
             $tempValue = $playerData->value('mp');
+            $effectValue = Item::where('id', $request->input('itemId'))->value('value');
             while($tempValue < PlayerItemController::MAX_STATUS)
             {
-                $tempValue += Item::where('id', $request->input('itemId'))->value('value');
+                $tempValue += $effectValue;
                 $useablecount++;
             }
         }
@@ -119,9 +121,6 @@ class PlayerItemController extends Controller
             $playerData->update(['mp' => min($playerData->value('mp') + Item::where('id', $request->input('itemId'))->value('value') * $useCount , PlayerItemController::MAX_STATUS)]);
         }
         $data->decrement('count', $useCount);
-
-        //所持数がゼロになったレコードの削除
-        PlayerItem::where('count', 0)->delete();
         
         return new Response([
             'itemId' => $request->input('itemId'),
