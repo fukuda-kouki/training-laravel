@@ -10,6 +10,10 @@ use App\Models\Item;
 
 class PlayerItemController extends Controller
 {
+
+    //プレイヤーのステータス最大値の定数を宣言
+    const MAX_STATUS = 200;
+
     //アイテム追加関数
     public function addItem(Request $request, $id)
     {
@@ -50,17 +54,26 @@ class PlayerItemController extends Controller
         $data = PlayerItem::query()->
         where([['player_id', $id],['item_id', $request->input('itemId')]]);
 
-        //所持数がゼロ（該当するレコードがない）の場合エラー
-        if($data->get()->isEmpty() || $data->value('count') == 0)
+        if($request->has('count'))
         {
-            return new Response('アイテムを所持していません。',Response::HTTP_BAD_REQUEST);
+            $useCount = $request->input('count');
+        }
+        else //リクエストに'count'が含まれていなければ使用数を1にする
+        {
+            $useCount = 1;
+        }
+        
+        //所持数が使用数以下もしくはゼロ（該当するレコードがない）の場合エラー
+        if($data->get()->isEmpty() || $data->value('count') < $useCount)
+        {
+            return new Response("アイテムを{$useCount}個所持していません。",Response::HTTP_BAD_REQUEST);
         }
 
         $playerData = Player::where('id',$id);
 
         //該当するステータスがすでに上限の場合
-        if($playerData->value('hp') >= 200 && $data->value('item_id') == 1 ||
-           $playerData->value('mp') >= 200 && $data->value('item_id') == 2 )
+        if($playerData->value('hp') >= PlayerItemController::MAX_STATUS && $data->value('item_id') == 1 ||
+           $playerData->value('mp') >= PlayerItemController::MAX_STATUS && $data->value('item_id') == 2 )
         {
             return new Response([
                 'itemId' => $request->input('itemId'),
@@ -76,14 +89,16 @@ class PlayerItemController extends Controller
         //アイテムを使用する
         if($request->input('itemId') == 1)
         {
-            $playerData->update(['hp' => min($playerData->value('hp') + Item::find(1)->value('value'), 200)]);
+            $playerData->update(['hp' => min($playerData->value('hp') + Item::where('id', $request->input('itemId'))->value('value') * $useCount, PlayerItemController::MAX_STATUS)]);
         }
         else if($request->input('itemId') == 2)
         {
-            $playerData->update(['mp' => min($playerData->value('mp') + Item::find(2)->value('value'), 200)]);
+            $playerData->update(['mp' => min($playerData->value('mp') + Item::where('id', $request->input('itemId'))->value('value')* $useCount , PlayerItemController::MAX_STATUS)]);
         }
+        $data->decrement('count', $useCount);
 
-        $data->decrement('count');
+        //所持数がゼロになったレコードの削除
+        PlayerItem::where('count', 0)->delete();
         
         return new Response([
             'itemId' => $request->input('itemId'),
