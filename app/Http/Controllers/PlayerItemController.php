@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Support\Arr;
 use App\Models\PlayerItem;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use App\Models\Player;
+use App\Models\Item;
 
 class PlayerItemController extends Controller
 {
-    //
+    //アイテム追加関数
     public function addItem(Request $request, $id)
     {
         $data = PlayerItem::query()->
@@ -39,6 +40,59 @@ class PlayerItemController extends Controller
         return new Response([
             'itemId'=> $playerItemData->value('item_id'),
             'count' => $playerItemData->value('count')
+        ]);
+    }
+
+    //アイテム使用関数
+    public function useItem(Request $request, $id)
+    {
+        //該当するデータの検索
+        $data = PlayerItem::query()->
+        where([['player_id', $id],['item_id', $request->input('itemId')]]);
+
+        //所持数がゼロ（該当するレコードがない）の場合エラー
+        if($data->get()->isEmpty() || $data->value('count') == 0)
+        {
+            return new Response('アイテムを所持していません。',Response::HTTP_BAD_REQUEST);
+        }
+
+        $playerData = Player::where('id',$id);
+
+        //該当するステータスがすでに上限の場合
+        if($playerData->value('hp') >= 200 && $data->value('item_id') == 1 ||
+           $playerData->value('mp') >= 200 && $data->value('item_id') == 2 )
+        {
+            return new Response([
+                'itemId' => $request->input('itemId'),
+                'count' => $data->value('count'),
+                'player' => [
+                    'id' => $id,
+                    'hp' => $playerData->value('hp'),
+                    'mp' => $playerData->value('mp')
+                ]
+            ]);
+        }
+
+        //アイテムを使用する
+        if($request->input('itemId') == 1)
+        {
+            $playerData->update(['hp' => min($playerData->value('hp') + Item::find(1)->value('value'), 200)]);
+        }
+        else if($request->input('itemId') == 2)
+        {
+            $playerData->update(['mp' => min($playerData->value('mp') + Item::find(2)->value('value'), 200)]);
+        }
+
+        $data->decrement('count');
+        
+        return new Response([
+            'itemId' => $request->input('itemId'),
+            'count' => $data->value('count'),
+            'player' => [
+                'id' => $id,
+                'hp' => $playerData->value('hp'),
+                'mp' => $playerData->value('mp')
+            ]
         ]);
     }
 }
