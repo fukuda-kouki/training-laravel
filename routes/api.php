@@ -25,3 +25,4 @@ Route::delete('/players/{id}', [PlayersController::class, 'destroy']);
 
 Route::post('/players/{id}/addItem', [PlayerItemController::class,'addItem']);
 Route::post('/players/{id}/useItem', [PlayerItemController::class,'useItem']);
+Route::post('/players/{id}/useGacha',[PlayerItemController::class,'useGacha']);
