@@ -115,7 +115,8 @@ class PlayerItemController extends Controller
     {
         //ガチャを引くプレイヤーのデータを取得
         $playerData = Player::where('id',$id);
-
+        if($playerData->doesntExist()) return new response("id:{$id}のプレイヤーデータが存在しない",Response::HTTP_BAD_REQUEST);
+ 
         //お金が足りなかったら
         if($playerData->value('money') < self::GACHA_PRICE * $request->input('count'))
         {
@@ -128,6 +129,7 @@ class PlayerItemController extends Controller
 
         //ガチャの結果を生成
         $itemData = Item::select('percent')->get();
+        if($itemData->isEmpty()) return new response("アイテムデータの取得に失敗",Response::HTTP_BAD_REQUEST);
         
         $result = [];
         for($i = 0; $i < $request->input('count'); $i++)
@@ -145,19 +147,13 @@ class PlayerItemController extends Controller
             }
 
             //結果を配列で格納
-            $added = false;
-            foreach($result as &$temp)
+            if(array_key_exists($itemId,$result))
             {
-                if($temp['itemId'] == $itemId)
-                {
-                    $temp['count'] += 1;
-                    $added = true;
-                    break;
-                }
+                $result[$itemId] += 1;
             }
-            if(!$added)
+            else
             {
-                array_push($result,['itemId' => $itemId, 'count' => 1]);
+                $result += array($itemId => 1);
             }
         }
 
@@ -165,17 +161,17 @@ class PlayerItemController extends Controller
         $insertData = [];
         $data = PlayerItem::query()->
             where('player_id', $id)->get();
-        foreach($result as &$temp)
+        
+        foreach($result as $key => $value)
         {
-            //同じ持ち物のデータがない場合新しく作成する
             $updated = false;
             foreach($data as &$tempData)
             {
-                if($tempData['item_id'] == $temp['itemId'])
+                if($tempData['item_id'] == $key)
                 {
                     PlayerItem::query()->
-                    where([['player_id', $id],['item_id', $temp['itemId']]])->
-                    increment('count', $temp['count']);
+                    where([['player_id', $id],['item_id', $key]])->
+                    increment('count', $value);
                     $updated = true;
                     break;
                 }
@@ -185,20 +181,28 @@ class PlayerItemController extends Controller
             {
                 array_push($insertData, [
                     'player_id' => $id,
-                    'item_id' => $temp['itemId'],
-                    'count' => $temp['count']
-                ]);
+                    'item_id' => $key,
+                    'count' => $value
+                    ]);
             }
         }
-
+        
         //作成したinsertDataをインサートする
-        if(count($insertData) >= 0)
+        if(count($insertData) > 0)
         {
             PlayerItem::insert($insertData);
         }
+        $returnResult = [];
+        foreach($result as $key => $value)
+        {
+            $returnResult[] = [
+                'itemId' => $key,
+                'count' => $value
+            ];
+        }
         
         return new Response([
-            'result' => $result,
+            'result' => $returnResult,
             'player' => [
                 'money' => $playerData->value('money'),
                 'Items' => PlayerItem::where('player_id', $id)->select('item_id','count')->get()
