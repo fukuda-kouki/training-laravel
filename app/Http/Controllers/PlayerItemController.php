@@ -165,7 +165,7 @@ class PlayerItemController extends Controller
         foreach($result as $key => $value)
         {
             $updated = false;
-            foreach($data as &$tempData)
+            foreach($data as $tempData)
             {
                 if($tempData['item_id'] == $key)
                 {
