@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Exception;
 use App\Models\PlayerItem;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -113,24 +115,40 @@ class PlayerItemController extends Controller
     //ガチャ関数
     public function useGacha(Request $request, $id)
     {
-        //ガチャを引くプレイヤーのデータを取得
-        $playerData = Player::where('id',$id);
-        if($playerData->doesntExist()) return new response("id:{$id}のプレイヤーデータが存在しない",Response::HTTP_BAD_REQUEST);
- 
+        //トランザクションの開始
+        DB::beginTransaction();
+        //ガチャを引くプレイヤーのデータを取得&ロック
+        $playerData = Player::lockForUpdate()->where('id',$id);
+        if($playerData->doesntExist()) 
+        {
+            DB::rollback();
+            return new response("id:{$id}のプレイヤーデータが存在しない",Response::HTTP_BAD_REQUEST);
+        }
+
         //お金が足りなかったら
         if($playerData->value('money') < self::GACHA_PRICE * $request->input('count'))
         {
-            //wip(仕様が不明)
+            DB::rollback();
             return new Response('お金が不足しています。',Response::HTTP_BAD_REQUEST);
         }
 
         //お金を引く
-        $playerData->decrement('money',self::GACHA_PRICE * $request->input('count'));
+        try {
+            $playerData->decrement('money',self::GACHA_PRICE * $request->input('count'));
+        } catch (Exception $e) {
+            DB::rollback();
+            return new Response('所持金の減算に失敗');
+        }
+        $money = $playerData->value('money'); //引いた後の所持金
 
         //ガチャの結果を生成
         $itemData = Item::select('percent')->get();
-        if($itemData->isEmpty()) return new response("アイテムデータの取得に失敗",Response::HTTP_BAD_REQUEST);
-        
+        if($itemData->isEmpty()) 
+        {
+            DB::rollback();
+            return new response("アイテムデータの取得に失敗",Response::HTTP_BAD_REQUEST);
+        }
+
         $result = [];
         for($i = 0; $i < $request->input('count'); $i++)
         {
@@ -157,9 +175,9 @@ class PlayerItemController extends Controller
             }
         }
 
-        //結果のアイテムを取得
+        //結果のアイテムを取得&ロック
         $insertData = [];
-        $data = PlayerItem::query()->
+        $data = PlayerItem::lockForUpdate()->
             where('player_id', $id)->get();
         
         foreach($result as $key => $value)
@@ -169,9 +187,14 @@ class PlayerItemController extends Controller
             {
                 if($tempData['item_id'] == $key)
                 {
-                    PlayerItem::query()->
-                    where([['player_id', $id],['item_id', $key]])->
-                    increment('count', $value);
+                    try{
+                        PlayerItem::query()->
+                        where([['player_id', $id],['item_id', $key]])->
+                        increment('count', $value);
+                    } catch(Exception $e){
+                        DB::rollback();
+                        return new Response('所持アイテムの加算に失敗');
+                    }
                     $updated = true;
                     break;
                 }
@@ -190,8 +213,16 @@ class PlayerItemController extends Controller
         //作成したinsertDataをインサートする
         if(count($insertData) > 0)
         {
-            PlayerItem::insert($insertData);
+            
+            try{
+                PlayerItem::insert($insertData);
+            } catch(Exception $e){
+                DB::rollback();
+                return new Response('所持アイテムレコードの追加に失敗');
+            }
         }
+
+       //レスポンスの取得
         $returnResult = [];
         foreach($result as $key => $value)
         {
@@ -200,12 +231,16 @@ class PlayerItemController extends Controller
                 'count' => $value
             ];
         }
+        $items = [ 'Items' => PlayerItem::where('player_id', $id)->select('item_id','count')->get()];
+
+         //トランザクション終了
+         DB::commit();
         
         return new Response([
             'result' => $returnResult,
             'player' => [
-                'money' => $playerData->value('money'),
-                'Items' => PlayerItem::where('player_id', $id)->select('item_id','count')->get()
+                $money,
+                $items
             ]
         ]);
     }
