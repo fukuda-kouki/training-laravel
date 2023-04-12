@@ -21,34 +21,47 @@ class PlayerItemController extends Controller
     //アイテム追加関数
     public function addItem(Request $request, $id)
     {
-        $data = PlayerItem::query()->
-        where([['player_id', $id],['item_id', $request->input('itemId')]])->
-        get();
+        //トランザクション開始
+        DB::beginTransaction();
+        $data = PlayerItem::lockForUpdate()->
+        where([['player_id', $id],['item_id', $request->input('itemId')]]);
         
         //同じ持ち物のデータがない場合新しくレコードを作成する
-        if($data->isEmpty())
+        if($data->doesntExist())
         {
-            PlayerItem::insert([
-                'player_id' => $id,
-                'item_id' => $request->input('itemId'),
-                'count' => $request->input('count')
-            ]);
+            try{
+                PlayerItem::insert([
+                    'player_id' => $id,
+                    'item_id' => $request->input('itemId'),
+                    'count' => $request->input('count') ]);
+                $data->lockForUpdate();
+            } catch(Exception $e) {
+                DB::rollBack();
+                return new Response("所持テータレコードの作成に失敗");
+            }
         }
         else //同じ持ち物のデータがある場合はそのレコードの'count'に追加するアイテムの個数分インクリメント
         {
-            PlayerItem::query()->
-            where([['player_id', $id],['item_id', $request->input('itemId')]])->
-            increment('count', $request->input('count'));
+            try{
+                PlayerItem::query()->
+                where([['player_id', $id],['item_id', $request->input('itemId')]])->
+                increment('count', $request->input('count'));
+            } catch(Exception $e) {
+                DB::rollBack();
+                return new Response("所持数の加算に失敗");
+            }
+           
         }
 
-        $playerItemData = PlayerItem::query()->
-        select('item_id','count')->
-        where([['player_id', $id],['item_id', $request->input('itemId')]]);
+        $returnResult = [
+            'itemId'=> $data->value('item_id'),
+            'count' => $data->value('count')
+        ];
 
-        return new Response([
-            'itemId'=> $playerItemData->value('item_id'),
-            'count' => $playerItemData->value('count')
-        ]);
+        //トランザクション終了
+        DB::commit();
+
+        return new Response($returnResult);
     }
 
     //アイテム使用関数
