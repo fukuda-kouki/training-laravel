@@ -23,6 +23,8 @@ class PlayerItemController extends Controller
     {
         //トランザクション開始
         DB::beginTransaction();
+
+        //所持品データの取得&ロック
         $data = PlayerItem::lockForUpdate()->
         where([['player_id', $id],['item_id', $request->input('itemId')]]);
         
@@ -67,36 +69,51 @@ class PlayerItemController extends Controller
     //アイテム使用関数
     public function useItem(Request $request, $id)
     {
-        //該当するデータの検索
-        $data = PlayerItem::query()->
-        where([['player_id', $id],['item_id', $request->input('itemId')]]);
+        $count = 1; //使用個数
 
-        $count = 0;
-        if($request->has('count'))
+        //リクエストに'count'が含まれていれば使用数を'count'にする
+        if($request->has('count')) 
         {
             $count = $request->input('count');
         }
-        else //リクエストに'count'が含まれていなければ使用数を1にする
-        {
-            $count = 1;
-        }
-        
-        //所持数が使用数以下もしくはゼロ（該当するレコードがない）の場合エラー
-        if($data->get()->isEmpty() || $data->value('count') < $count)
-        {
-            return new Response("アイテムを{$count}個所持していません。",Response::HTTP_BAD_REQUEST);
+
+        //トランザクション開始
+        DB::beginTransaction();
+
+        //アイテムを使用するプレイヤーデータの取得&ロック
+        try {
+            $playerData = Player::lockForUpdate()->where('id',$id);
+            if($playerData->doesntExist()) throw new Exception(':該当するプレイヤーデータなし');
+        } catch(Exception $e){
+            DB::rollBack();
+            return new Response("プレイヤーデータの取得に失敗{$e}",Response::HTTP_BAD_REQUEST);
         }
 
-        $playerData = Player::where('id',$id);
-        $useablecount = 0;
-        $dataArr =['hp', 'mp'];
+        //該当するデータの検索&ロック
+        try {
+            $data = PlayerItem::lockForUpdate()->
+            where([['player_id', $id],['item_id', $request->input('itemId')]]);
+            if($data->doesntExist()) throw new Exception(':該当するアイテム所持データなし');
+            if($data->value('count') < $count) throw new Exception(":アイテムを{$count}個所持していません。");
+        } catch(Exception $e){
+            DB::rollBack();
+            return new Response("アイテムデータの取得に失敗{$e}",Response::HTTP_BAD_REQUEST);
+        }
+       
+        $useablecount = 0; //使用可能個数
+        $dataArr =['hp', 'mp']; //itemIdに基づいた参照ステータスの配列
 
-        //ステータスが上限に達するまでに使用できるアイテムの個数を数える
-        $tempValue = $playerData->value($dataArr[$data->value('item_id') - 1]);
+        //現在のステータスを取得
+        $statusValue = $playerData->value($dataArr[$data->value('item_id') - 1]);
+
+        //アイテムの効果量を取得
         $effectValue = Item::where('id', $request->input('itemId'))->value('value');
-        while($tempValue < PlayerItemController::MAX_STATUS)
+        
+        
+        //ステータスが上限に達するまでに使用できるアイテムの個数を数える
+        while($statusValue < PlayerItemController::MAX_STATUS)
         {
-            $tempValue += $effectValue;
+            $statusValue += $effectValue;
             $useablecount++;
         }
 
@@ -112,15 +129,18 @@ class PlayerItemController extends Controller
             $data->decrement('count', $useCount);
         }
 
-        return new Response([
+        $returnResult = [
             'itemId' => $request->input('itemId'),
             'count' => $data->value('count'),
             'player' => [
                 'id' => $id,
                 'hp' => $playerData->value('hp'),
-                'mp' => $playerData->value('mp')
-            ]
-        ]);
+                'mp' => $playerData->value('mp')]];
+
+        //トランザクション終了
+        DB::commit();
+        
+        return new Response($returnResult);
     }
 
     
@@ -130,6 +150,7 @@ class PlayerItemController extends Controller
     {
         //トランザクションの開始
         DB::beginTransaction();
+
         //ガチャを引くプレイヤーのデータを取得&ロック
         $playerData = Player::lockForUpdate()->where('id',$id);
         if($playerData->doesntExist()) 
