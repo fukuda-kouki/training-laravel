@@ -25,8 +25,11 @@ class PlayerItemController extends Controller
         DB::beginTransaction();
         try 
         {
+            //リクエストのプレイヤーデータが存在するか確認&ロック
+            if(Player::lockForUpdate()->where('id',$id)->doesntExist()) throw new Exception('該当するプレイヤーデータなし');
+            
             //所持品データの取得&ロック
-            $data = PlayerItem::lockForUpdate()->where([['player_id', $id],['item_id', $request->input('itemId')]])->get();
+            $data = PlayerItem::where([['player_id', $id],['item_id', $request->input('itemId')]])->get();
             
             //同じ持ち物のデータがない場合新しくレコードを作成する
             if($data->isEmpty())
@@ -78,9 +81,8 @@ class PlayerItemController extends Controller
             $playerData = Player::lockForUpdate()->where('id',$id)->get();
             if($playerData->isEmpty()) throw new Exception('該当するプレイヤーデータなし');
         
-            //該当するデータの検索&ロック
-            $data = PlayerItem::lockForUpdate()->
-                where([['player_id', $id],['item_id', $request->input('itemId')]])->get();
+            //該当するデータの検索
+            $data = PlayerItem::where([['player_id', $id],['item_id', $request->input('itemId')]])->get();
             if($data->isEmpty()) throw new Exception('該当する所持データなし');
             if($data[0]['count'] < $count) throw new Exception("アイテムを{$count}個所持していない");
             
